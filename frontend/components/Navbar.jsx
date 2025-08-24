@@ -43,7 +43,7 @@ const Navbar = () => {
                 Logged in as <span className="font-semibold">{username}</span>
               </p>
               <span className="text-white bg-indigo-600 px-3 py-1 text-xs sm:text-sm rounded-full capitalize">
-                {role}
+                {role==='admin'?'TeamLead':'Employee'}
               </span>
               <button 
                 onClick={handleLogout}
