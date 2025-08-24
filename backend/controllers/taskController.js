@@ -89,6 +89,34 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
+// @desc    Get task by ID
+// @route   GET /api/tasks/:id
+// @access  Private
+exports.getTaskById = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate('assignedTo', 'fullName employeeId');
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Verify user has access to this task
+    if (req.user.role === 'employee') {
+      const employee = await Employee.findOne({ username: req.user.username });
+      if (!employee || !task.assignedTo.equals(employee._id)) {
+        return res.status(403).json({ message: 'Not authorized' });
+      }
+    }
+
+    res.json(task);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
 // @desc    Get task statistics
 // @route   GET /api/tasks/stats
 // @access  Private
@@ -333,6 +361,157 @@ exports.getTaskTimeDetails = async (req, res) => {
       },
       timeEntries: task.timeEntries,
       totalTimeSpent: task.totalTimeSpent
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// In taskController.js, add this method:
+
+// @desc    Update time entry description
+// @route   PUT /api/tasks/:taskId/time-entries/:entryId/description
+// @access  Private
+// @desc    Update time entry description
+// @route   PUT /api/tasks/:taskId/time-entries/:entryId/description
+// @access  Private
+exports.updateTimeEntryDescription = async (req, res) => {
+  try {
+    const { id: taskId, entryId } = req.params;
+    const { description } = req.body;
+
+    console.log('Updating time entry:', { taskId, entryId, description });
+
+    const task = await Task.findById(taskId);
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Verify employee is assigned to this task
+    if (req.user.role === 'employee') {
+      const employee = await Employee.findOne({ username: req.user.username });
+      if (!employee || !task.assignedTo.equals(employee._id)) {
+        return res.status(403).json({ message: 'Not authorized' });
+      }
+    }
+
+    console.log('Task time entries:', task.timeEntries);
+
+    // Find the time entry by ID (using string comparison)
+    const timeEntry = task.timeEntries.find(entry => 
+      entry._id && entry._id.toString() === entryId
+    );
+
+    console.log('Found time entry:', timeEntry);
+
+    if (!timeEntry) {
+      return res.status(404).json({ message: 'Time entry not found' });
+    }
+
+    // Update the description
+    timeEntry.description = description;
+    await task.save();
+
+    res.json(task);
+  } catch (err) {
+    console.error('Error updating time entry:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get weekly time report for employee
+// @route   GET /api/tasks/weekly-report/:employeeId
+// @access  Private
+exports.getWeeklyReport = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    // Calculate date range for the week
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    if (!startDate) {
+      start.setDate(start.getDate() - start.getDay()); // Start of current week (Sunday)
+    }
+    if (!endDate) {
+      end.setDate(start.getDate() + 6); // End of current week (Saturday)
+    }
+
+    // Find all tasks for this employee with time entries in the date range
+    const tasks = await Task.find({
+      assignedTo: employeeId,
+      'timeEntries.startTime': {
+        $gte: start,
+        $lte: end
+      }
+    }).populate('assignedTo', 'fullName employeeId');
+
+    // Organize data by day
+    const dailyReports = {};
+    let totalHours = 0;
+    let totalBreaks = 0;
+
+    tasks.forEach(task => {
+      task.timeEntries.forEach(entry => {
+        if (entry.startTime >= start && entry.startTime <= end && entry.endTime) {
+          const entryDate = new Date(entry.startTime).toLocaleDateString();
+          
+          if (!dailyReports[entryDate]) {
+            dailyReports[entryDate] = {
+              date: entryDate,
+              tasks: [],
+              totalHours: 0,
+              totalBreaks: 0
+            };
+          }
+
+          const entryHours = (entry.totalDuration || 0) / 60; // Convert minutes to hours
+          const breakMinutes = entry.breaks?.reduce((total, b) => total + (b.duration || 0), 0) || 0;
+          
+         
+          // In taskController.js, modify the getWeeklyReport method:
+
+          // In your getWeeklyReport controller, make sure entryIdentifier is correct:
+            // In taskController.js getWeeklyReport method:
+          dailyReports[entryDate].tasks.push({
+            taskTitle: task.title,
+            taskCategory: task.category,
+            description: entry.description,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            hours: entryHours,
+            breaks: breakMinutes / 60,
+            taskId: task._id.toString(),
+            entryId: entry._id.toString(), // Make sure this is included
+            entryIdentifier: entry.startTime.toISOString()
+          });
+
+          dailyReports[entryDate].totalHours += entryHours;
+          dailyReports[entryDate].totalBreaks += breakMinutes / 60;
+          totalHours += entryHours;
+          totalBreaks += breakMinutes / 60;
+        }
+      });
+    });
+
+    // Convert dailyReports object to array and sort by date
+    const dailyReportsArray = Object.values(dailyReports).sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
+
+    res.json({
+      employee: tasks[0]?.assignedTo || { _id: employeeId },
+      period: `${start.toLocaleDateString()} to ${end.toLocaleDateString()}`,
+      dailyReports: dailyReportsArray,
+      summary: {
+        totalHours: parseFloat(totalHours.toFixed(2)),
+        totalBreaks: parseFloat(totalBreaks.toFixed(2)),
+        netHours: parseFloat((totalHours - totalBreaks).toFixed(2)),
+        daysWorked: dailyReportsArray.length
+      }
     });
   } catch (err) {
     console.error(err);

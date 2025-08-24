@@ -7,10 +7,12 @@ const EmpSideNav = () => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
 
-  const navItems = [
-    { path: '/employee-dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
-  ];
-
+  
+const navItems = [
+  { path: '/employee-dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
+  { path: '/employee-dashboard/weekly-reports', label: 'Weekly Reports', icon: 'bi-calendar-week' },
+  { path: '/employee-dashboard/communication', label: 'Team Chat', icon: 'bi-chat-dots' },
+];
   return (
     <>
       <div

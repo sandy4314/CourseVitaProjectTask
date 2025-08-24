@@ -13,6 +13,7 @@ const SideNav = () => {
     { path: '/admin-dashboard/employees', label: 'Employees', icon: 'bi-people' },
     { path: '/admin-dashboard/create-employee', label: 'Create Employees', icon: 'bi-person-plus' },
     { path: '/admin-dashboard/assign-task', label: 'Assign Task', icon: 'bi-list-task' },
+    { path: '/admin-dashboard/communication', label: 'Team Communication', icon: 'bi-chat-dots' }
 
   ];
 

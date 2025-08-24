@@ -11,7 +11,7 @@ const taskTimeEntrySchema = new mongoose.Schema({
   }],
   totalDuration: { type: Number, default: 0 }, // in minutes
   description: { type: String }
-}, { _id: false });
+});
 
 const taskSchema = new mongoose.Schema({
   title: {

@@ -14,6 +14,21 @@ exports.getEmployees = async (req, res) => {
   }
 };
 
+exports.getMyProfile = async (req, res) => {
+  try {
+    const employee = await Employee.findOne({ username: req.user.username });
+    
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee profile not found' });
+    }
+
+    res.json(employee);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.getOneEmployee= async (req,res)=>{
   try
   {

@@ -8,37 +8,50 @@ const EmpDashboard = () => {
   const [nav, setNav] = useState("new");
   const [selectedTask, setSelectedTask] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timer, setTimer] = useState(0);
-  const [isActive, setIsActive] = useState(false);
+  const [taskTimers, setTaskTimers] = useState({});
+  const [activeTaskId, setActiveTaskId] = useState(null);
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [dailyDescription, setDailyDescription] = useState('');
   const [timeDetails, setTimeDetails] = useState(null);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [taskToSwitchTo, setTaskToSwitchTo] = useState(null);
 
-  useEffect(() => {
+
+   useEffect(() => {
     const fetchTasks = async () => {
       try {
         const data = await fetchWithAuth('/tasks');
         setTasks(data);
         
-        const activeTask = data.find(task => 
-          task.status === 'active' && 
-          task.timeEntries?.some(entry => !entry.endTime)
-        );
+        // Initialize timers for all tasks
+        const timers = {};
+        let activeId = null;
+        let onBreak = false;
         
-        if (activeTask) {
-          const activeEntry = activeTask.timeEntries.find(entry => !entry.endTime);
-          const activeBreak = activeEntry?.breaks?.find(b => !b.end);
+        data.forEach(task => {
+          timers[task._id] = 0;
           
-          if (activeBreak) {
-            setIsOnBreak(true);
+          if (task.status === 'active') {
+            const activeEntry = task.timeEntries?.find(entry => !entry.endTime);
+            if (activeEntry) {
+              const startTime = new Date(activeEntry.startTime);
+              const now = new Date();
+              timers[task._id] = Math.floor((now - startTime) / 1000);
+              
+              // Check if this is the first active task we find
+              if (!activeId) {
+                activeId = task._id;
+                const activeBreak = activeEntry.breaks?.find(b => !b.end);
+                onBreak = !!activeBreak;
+              }
+            }
           }
-          
-          setIsActive(true);
-          const startTime = new Date(activeEntry.startTime);
-          const now = new Date();
-          setTimer(Math.floor((now - startTime) / 1000));
-        }
+        });
+        
+        setTaskTimers(timers);
+        setActiveTaskId(activeId);
+        setIsOnBreak(onBreak);
       } catch (error) {
         console.error('Error fetching tasks:', error);
         setMessage({ text: 'Failed to load tasks', type: 'error' });
@@ -50,19 +63,22 @@ const EmpDashboard = () => {
     fetchTasks();
   }, []);
 
+
+
   useEffect(() => {
     let interval = null;
     
-    if (isActive && !isOnBreak) {
+    if (activeTaskId && !isOnBreak) {
       interval = setInterval(() => {
-        setTimer((timer) => timer + 1);
+        setTaskTimers(prev => ({
+          ...prev,
+          [activeTaskId]: (prev[activeTaskId] || 0) + 1
+        }));
       }, 1000);
-    } else {
-      clearInterval(interval);
     }
     
     return () => clearInterval(interval);
-  }, [isActive, isOnBreak]);
+  }, [activeTaskId, isOnBreak]);
 
   const formatTime = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -110,29 +126,86 @@ const EmpDashboard = () => {
     }
   };
 
-  const startTask = async (taskId) => {
-    try {
-      const updatedTask = await fetchWithAuth(`/tasks/${taskId}/start`, {
-        method: 'POST'
-      });
-      
-      setTasks(tasks.map(task => 
-        task._id === taskId ? updatedTask : task
-      ));
-      
-      if (selectedTask && selectedTask._id === taskId) {
-        setSelectedTask(updatedTask);
-      }
-      
-      setIsActive(true);
-      setTimer(0);
-      showMessage('Task started! Timer is running.', 'success');
-    } catch (error) {
-      showMessage(error.message, 'error');
-    }
-  };
+ const startTask = async (taskId) => {
 
-  const takeBreak = async (taskId) => {
+   if (activeTaskId && activeTaskId !== taskId) {
+    setTaskToSwitchTo(taskId);
+    setShowSwitchModal(true);
+    return;
+  }
+
+  try {
+    // If another task is active, end its day first
+    if (activeTaskId && activeTaskId !== taskId) {
+      await endTaskDay(activeTaskId, true); // Pass true to indicate silent ending
+    }
+
+    const updatedTask = await fetchWithAuth(`/tasks/${taskId}/start`, {
+      method: 'POST'
+    });
+    
+    // Update the tasks list
+    setTasks(tasks.map(task => 
+      task._id === taskId ? updatedTask : 
+      task._id === activeTaskId ? { ...task, status: 'active' } : // Reset previous active task
+      task
+    ));
+    
+    // Update selected task if it's the one being started
+    if (selectedTask && selectedTask._id === taskId) {
+      setSelectedTask(updatedTask);
+    }
+    
+    // Set the new active task
+    setActiveTaskId(taskId);
+    setTaskTimers(prev => ({ ...prev, [taskId]: 0 }));
+    setIsOnBreak(false);
+    showMessage('Task started! Timer is running.', 'success');
+  } catch (error) {
+    showMessage(error.message, 'error');
+  }
+
+  await proceedWithStartTask(taskId);
+};
+
+
+const proceedWithStartTask = async (taskId) => {
+  try {
+    // If another task is active, end its day first
+    if (activeTaskId && activeTaskId !== taskId) {
+      await endTaskDay(activeTaskId, true); // Pass true to indicate silent ending
+    }
+
+    const updatedTask = await fetchWithAuth(`/tasks/${taskId}/start`, {
+      method: 'POST'
+    });
+    
+    // Update the tasks list
+    setTasks(tasks.map(task => 
+      task._id === taskId ? updatedTask : 
+      task._id === activeTaskId ? { ...task, status: 'active' } : // Reset previous active task
+      task
+    ));
+    
+    // Update selected task if it's the one being started
+    if (selectedTask && selectedTask._id === taskId) {
+      setSelectedTask(updatedTask);
+    }
+    
+    // Set the new active task
+    setActiveTaskId(taskId);
+    setTaskTimers(prev => ({ ...prev, [taskId]: 0 }));
+    setIsOnBreak(false);
+    showMessage('Task started! Timer is running.', 'success');
+  } catch (error) {
+    showMessage(error.message, 'error');
+  } finally {
+    setShowSwitchModal(false);
+    setTaskToSwitchTo(null);
+  }
+};
+
+ const takeBreak = async (taskId) => {
     try {
       await fetchWithAuth(`/tasks/${taskId}/break`, {
         method: 'POST'
@@ -145,7 +218,7 @@ const EmpDashboard = () => {
     }
   };
 
-  const resumeTask = async (taskId) => {
+   const resumeTask = async (taskId) => {
     try {
       await fetchWithAuth(`/tasks/${taskId}/resume`, {
         method: 'POST'
@@ -158,33 +231,43 @@ const EmpDashboard = () => {
     }
   };
 
-  const endTaskDay = async (taskId) => {
-    try {
-      const updatedTask = await fetchWithAuth(`/tasks/${taskId}/endday`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ description: dailyDescription })
-      });
-      
-      setTasks(tasks.map(task => 
-        task._id === taskId ? updatedTask : task
-      ));
-      
-      if (selectedTask && selectedTask._id === taskId) {
-        setSelectedTask(updatedTask);
-      }
-      
-      setIsActive(false);
-      setIsOnBreak(false);
-      setTimer(0);
-      setDailyDescription('');
-      showMessage('Work day ended. Time logged successfully.', 'success');
-    } catch (error) {
-      showMessage(error.message, 'error');
+
+ const endTaskDay = async (taskId, silent = false) => {
+  try {
+    const endpoint = `/tasks/${taskId}/endday`;
+    const body = silent ? { description: 'Switched to another task' } : { description: dailyDescription };
+    
+    const updatedTask = await fetchWithAuth(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body)
+    });
+    
+    setTasks(tasks.map(task => 
+      task._id === taskId ? updatedTask : task
+    ));
+    
+    if (selectedTask && selectedTask._id === taskId) {
+      setSelectedTask(updatedTask);
     }
-  };
+    
+    // Only reset these if we're ending the current active task
+    if (activeTaskId === taskId) {
+      setActiveTaskId(null);
+      setIsOnBreak(false);
+      if (!silent) setDailyDescription('');
+    }
+    
+    if (!silent) {
+      showMessage('Work day ended. Time logged successfully.', 'success');
+    }
+  } catch (error) {
+    showMessage(error.message, 'error');
+  }
+};
+
 
   const getTaskTimeDetails = async (taskId) => {
     try {
@@ -195,7 +278,13 @@ const EmpDashboard = () => {
     }
   };
 
-  const filteredTasks = tasks.filter(task => task.status === nav);
+const filteredTasks = tasks.filter(task => {
+  if (nav === "active") {
+    return task.status === "active" || task._id === activeTaskId;
+  }
+  return task.status === nav;
+});
+
 
   if (loading) {
     return (
@@ -207,15 +296,54 @@ const EmpDashboard = () => {
 
   return (
     <div className="flex">
-      {message.text && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
-          message.type === 'error' ? 'bg-red-100 text-red-800' : 
-          message.type === 'success' ? 'bg-green-100 text-green-800' : 
-          'bg-blue-100 text-blue-800'
-        }`}>
-          {message.text}
-        </div>
-      )}
+      {/* Message notification (keep existing) */}
+          {message.text && (
+            <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
+              message.type === 'error' ? 'bg-red-100 text-red-800' : 
+              message.type === 'success' ? 'bg-green-100 text-green-800' : 
+              'bg-blue-100 text-blue-800'
+            }`}>
+              {message.text}
+            </div>
+          )}
+
+          {/* Task Switch Confirmation Modal */}
+          {showSwitchModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-xl font-bold text-gray-800">Switch Tasks</h3>
+                  <button 
+                    onClick={() => setShowSwitchModal(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <p className="text-gray-600 mb-6">
+                  You have an active task. Do you want to stop it and start this one?
+                </p>
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowSwitchModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => proceedWithStartTask(taskToSwitchTo)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    Switch Task
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
       <div className="p-4 flex-1">
         <EmpOverView />
@@ -259,44 +387,44 @@ const EmpDashboard = () => {
               {selectedTask.status === "active" && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                   <div className="text-3xl font-mono mb-4 text-center">
-                    {formatTime(timer)}
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {!isActive ? (
-                      <button 
-                        onClick={() => startTask(selectedTask._id)}
-                        className="bg-green-500 hover:bg-green-600 px-4 py-2 text-white rounded"
-                      >
-                        Start Task
-                      </button>
-                    ) : (
-                      <>
-                        {!isOnBreak ? (
-                          <button 
-                            onClick={() => takeBreak(selectedTask._id)}
-                            className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 text-white rounded"
-                          >
-                            Take Break
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => resumeTask(selectedTask._id)}
-                            className="bg-blue-500 hover:bg-blue-600 px-4 py-2 text-white rounded"
-                          >
-                            End Break
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => endTaskDay(selectedTask._id)}
-                          className="bg-red-500 hover:bg-red-600 px-4 py-2 text-white rounded"
-                        >
-                          End Day
-                        </button>
-                      </>
-                    )}
-                  </div>
+        {formatTime(taskTimers[selectedTask._id] || 0)}
+      </div>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {activeTaskId !== selectedTask._id ? (
+          <button 
+            onClick={() => startTask(selectedTask._id)}
+            className="bg-green-500 hover:bg-green-600 px-4 py-2 text-white rounded"
+          >
+            Start Task
+          </button>
+        ) : (
+          <>
+            {!isOnBreak ? (
+              <button 
+                onClick={() => takeBreak(selectedTask._id)}
+                className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 text-white rounded"
+              >
+                Take Break
+              </button>
+            ) : (
+              <button 
+                onClick={() => resumeTask(selectedTask._id)}
+                className="bg-blue-500 hover:bg-blue-600 px-4 py-2 text-white rounded"
+              >
+                End Break
+              </button>
+            )}
+            <button 
+              onClick={() => endTaskDay(selectedTask._id)}
+              className="bg-red-500 hover:bg-red-600 px-4 py-2 text-white rounded"
+            >
+              End Day
+            </button>
+          </>
+        )}
+      </div>
 
-                  {isActive && (
+                  {activeTaskId && (
                     <div className="mt-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Today's Work Summary
@@ -330,7 +458,7 @@ const EmpDashboard = () => {
                 </div>
               )}
               
-              {selectedTask.status === "active" && !isActive && (
+              {selectedTask.status === "active" && !activeTaskId && (
                 <div className="flex gap-2">
                   <button 
                     onClick={() => updateStatus(selectedTask._id, "completed")} 
@@ -447,8 +575,17 @@ const EmpDashboard = () => {
                       assigneddate: new Date(task.createdAt).toLocaleDateString(),
                       domain: task.category
                     })}
-                    className="p-4 border rounded shadow cursor-pointer hover:bg-gray-100 h-full flex flex-col"
+                    className={`p-4 border rounded shadow cursor-pointer hover:bg-gray-100 h-full flex flex-col ${
+                      task._id === activeTaskId ? 'border-2 border-blue-500' : ''
+                    }`}
+
                   >
+                    {task._id === activeTaskId && (
+                      <span className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                        Active
+                      </span>
+                    )}
+
                     <div className="flex justify-between items-start mb-2 min-h-[3rem]">
                       <h2 className="text-lg font-semibold line-clamp-2 flex-1 pr-2">
                         {task.title}
