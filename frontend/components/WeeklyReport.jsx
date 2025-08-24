@@ -18,66 +18,84 @@ const WeeklyReport = () => {
   
   const reportRef = useRef();
 
-  function getStartOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff)).toISOString().split('T')[0];
-  }
+  // In weeklyReport.jsx - fix date functions
+function getStartOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day; // Sunday is day 0
+  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+}
 
-  function getEndOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() + (7 - day) - (day === 0 ? 7 : 0);
-    return new Date(d.setDate(diff)).toISOString().split('T')[0];
-  }
+function getEndOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() + (6 - day); // Saturday is end of week
+  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+}
 
   const showMessage = (text, type = 'info', duration = 3000) => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), duration);
   };
 
-  const fetchReport = async () => {
-    setLoading(true);
-    try {
-      let employeeId;
+  // In weeklyReport.jsx - fetchReport function
+const fetchReport = async () => {
+  setLoading(true);
+  try {
+    let employeeId;
 
-      // Method 1: Use the new my-profile endpoint
+    // Try multiple methods to get employee ID
+    try {
+      // Method 1: Get from user profile
+      const profile = await fetchWithAuth('/auth/me'); // or your user endpoint
+      if (profile.employeeId) {
+        employeeId = profile.employeeId;
+      }
+    } catch (error) {
+      console.log('Failed to get employee ID from profile:', error);
+    }
+
+    // Method 2: Get from employee profile
+    if (!employeeId) {
       try {
         const employeeProfile = await fetchWithAuth('/employees/my-profile');
         employeeId = employeeProfile._id;
       } catch (error) {
-        console.log('Failed to get employee ID from profile:', error);
-        
-        // Method 2: Fallback - get employee ID from tasks
-        try {
-          const tasks = await fetchWithAuth('/tasks');
-          if (tasks.length > 0 && tasks[0].assignedTo && tasks[0].assignedTo._id) {
-            employeeId = tasks[0].assignedTo._id;
-          }
-        } catch (taskError) {
-          console.log('Failed to get employee ID from tasks:', taskError);
-          showMessage('Cannot determine employee ID. Please contact administrator.', 'error');
-          return;
-        }
+        console.log('Failed to get employee ID from employee profile:', error);
       }
-
-      if (!employeeId) {
-        showMessage('Cannot determine employee ID. Please contact administrator.', 'error');
-        return;
-      }
-
-      const data = await fetchWithAuth(
-        `/tasks/weekly-report/${employeeId}?startDate=${dateRange.start}&endDate=${dateRange.end}`
-      );
-      setReport(data);
-    } catch (error) {
-      console.error('Error fetching report:', error);
-      showMessage('Failed to load weekly report', 'error');
-    } finally {
-      setLoading(false);
     }
-  };
+
+    // Method 3: Get from tasks
+    if (!employeeId) {
+      try {
+        const tasks = await fetchWithAuth('/tasks?limit=1');
+        if (tasks.length > 0 && tasks[0].assignedTo && tasks[0].assignedTo._id) {
+          employeeId = tasks[0].assignedTo._id;
+        }
+      } catch (taskError) {
+        console.log('Failed to get employee ID from tasks:', taskError);
+      }
+    }
+
+    if (!employeeId) {
+      showMessage('Cannot determine employee ID. Please contact administrator.', 'error');
+      return;
+    }
+
+    console.log('Using employee ID:', employeeId);
+
+    const data = await fetchWithAuth(
+      `/tasks/weekly-report/${employeeId}?startDate=${dateRange.start}&endDate=${dateRange.end}`
+    );
+    console.log('Report data:', data);
+    setReport(data);
+  } catch (error) {
+    console.error('Error fetching report:', error);
+    showMessage('Failed to load weekly report: ' + error.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const downloadPDF = async () => {
     if (!report) return;

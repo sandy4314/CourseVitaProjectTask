@@ -38,7 +38,7 @@ export default function RootLayout({ children }) {
     return (
       <html lang="en">
         <head>
-          <title>Employee Task Flow</title>
+          <title>ProjectTask And Collaboration</title>
         </head>
         <body className={inter.className}>
           <div className="flex items-center justify-center min-h-screen">

@@ -155,7 +155,7 @@ export default function EmployeeTasks({ params }) {
       )}
 
       {/* Header Section */}
-      // In your EmployeeTasks component, find the header section and add the button:
+      
 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
   <h2 className="text-2xl font-bold text-gray-800">Assigned Tasks</h2>
   

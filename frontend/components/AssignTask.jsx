@@ -272,24 +272,45 @@ function AssignTask() {
             {/* Buttons */}
             <div className="flex justify-end gap-4 pt-2">
               <button
-                type="button"
-                className="px-4 py-2 border border-gray-500 text-black rounded flex gap-2 hover:bg-gray-100"
-                onClick={() => formik.resetForm()}
-              >
-                <i className="bi bi-x"></i> Cancel
-              </button>
+  type="button"
+  className="px-4 py-2 border border-gray-500 text-black rounded flex gap-2 hover:bg-gray-100 justify-center items-center"
+  onClick={() => formik.resetForm()}
+>
+  <i className="bi bi-x"></i> Cancel
+</button>
               <button
                 type="submit"
                 disabled={formik.isSubmitting}
-                className="px-4 py-2 bg-blue-500 text-white rounded flex gap-2 hover:bg-blue-600 disabled:bg-blue-300"
+                className="relative px-6 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {formik.isSubmitting ? (
-                  'Assigning...'
-                ) : (
-                  <>
-                    <i className="bi bi-floppy"></i> Assign Task
-                  </>
-                )}
+                {/* Animated background elements */}
+                <span className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+
+                {/* Shine effect on hover */}
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></span>
+
+                {/* Button content */}
+                <span className="relative flex items-center gap-2">
+                  {formik.isSubmitting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Assigning...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-floppy text-lg"></i>
+                      <span className="group-hover:scale-105 transition-transform duration-300">Assign Task</span>
+                      
+                      {/* Right arrow that appears on hover */}
+                      <svg className="w-4 h-4 opacity-0 group-hover:opacity-100 transform -translate-x-2 group-hover:translate-x-0 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l7 7 7-7M12 5v14"></path>
+                      </svg>
+                    </>
+                  )}
+                </span>
               </button>
             </div>
           </form>

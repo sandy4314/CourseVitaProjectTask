@@ -1,9 +1,11 @@
 // app/admin-dashboard/employee-reports/[id]/page.js
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { fetchWithAuth } from '@/utils/api';
 import { useParams, useRouter } from 'next/navigation';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 export default function EmployeeReports() {
   const params = useParams();
@@ -17,20 +19,24 @@ export default function EmployeeReports() {
     start: getStartOfWeek(new Date()),
     end: getEndOfWeek(new Date())
   });
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  
+  const reportRef = useRef();
 
-  function getStartOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff)).toISOString().split('T')[0];
-  }
+  // In weeklyReport.jsx - fix date functions
+function getStartOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day; // Sunday is day 0
+  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+}
 
-  function getEndOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() + (7 - day) - (day === 0 ? 7 : 0);
-    return new Date(d.setDate(diff)).toISOString().split('T')[0];
-  }
+function getEndOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() + (6 - day); // Saturday is end of week
+  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+}
 
   const showMessage = (text, type = 'info', duration = 3000) => {
     setMessage({ text, type });
@@ -59,6 +65,138 @@ export default function EmployeeReports() {
     }
   };
 
+  const downloadPDF = async () => {
+    if (!report || !employee) return;
+    
+    setGeneratingPDF(true);
+    try {
+      // Create a temporary container for PDF generation
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.position = 'absolute';
+      pdfContainer.style.left = '-9999px';
+      pdfContainer.style.width = '800px';
+      pdfContainer.style.padding = '20px';
+      pdfContainer.style.backgroundColor = 'white';
+      document.body.appendChild(pdfContainer);
+      
+      // Generate PDF content
+      pdfContainer.innerHTML = `
+        <div style="font-family: Arial, sans-serif;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #2563eb; margin-bottom: 5px;">Employee Weekly Report</h1>
+            <p style="color: #6b7280; margin: 0;">${report.period}</p>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 20px; padding: 15px; background-color: #f0f9ff; border-radius: 8px;">
+            <div>
+              <p style="font-weight: bold; margin: 0;">Employee: ${employee.fullName || 'Unknown'}</p>
+              <p style="margin: 5px 0 0 0; color: #6b7280;">ID: ${employee.employeeId || 'N/A'}</p>
+              <p style="margin: 5px 0 0 0; color: #6b7280;">Department: ${employee.department || 'N/A'}</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="font-weight: bold; margin: 0; font-size: 18px;">Total Hours: ${formatTime(report.summary?.totalHours)}</p>
+              <p style="margin: 5px 0 0 0; color: #6b7280;">Net Hours: ${formatTime(report.summary?.netHours)}</p>
+              <p style="margin: 5px 0 0 0; color: #6b7280;">Week: ${dateRange.start} to ${dateRange.end}</p>
+            </div>
+          </div>
+          
+          ${report.dailyReports && report.dailyReports.length > 0 ? `
+            ${report.dailyReports.map(dayReport => `
+              <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
+                  <h2 style="margin: 0; color: #374151;">${dayReport.date}</h2>
+                  <div style="text-align: right;">
+                    <p style="margin: 0; font-weight: bold;">Worked: ${formatTime(dayReport.totalHours)}</p>
+                    <p style="margin: 5px 0 0 0; color: #6b7280;">Breaks: ${formatTime(dayReport.totalBreaks)}</p>
+                  </div>
+                </div>
+                
+                ${dayReport.tasks && dayReport.tasks.length > 0 ? `
+                  ${dayReport.tasks.map(task => `
+                    <div style="margin-bottom: 15px; padding-left: 10px; border-left: 3px solid #3b82f6;">
+                      <div style="display: flex; justify-content: space-between;">
+                        <div style="flex: 1;">
+                          <h3 style="margin: 0 0 5px 0; color: #1f2937;">${task.taskTitle || 'Unknown Task'}</h3>
+                          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">${task.taskCategory || 'No category'}</p>
+                          ${task.description ? `<p style="margin: 0 0 8px 0; font-size: 14px;">${task.description}</p>` : ''}
+                        </div>
+                        <div style="text-align: right;">
+                          <p style="margin: 0; font-weight: bold;">${formatTime(task.hours)}</p>
+                          ${task.breaks > 0 ? `<p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">Breaks: ${formatTime(task.breaks)}</p>` : ''}
+                        </div>
+                      </div>
+                      <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 12px;">
+                        ${task.startTime ? new Date(task.startTime).toLocaleTimeString() : 'N/A'} - ${task.endTime ? new Date(task.endTime).toLocaleTimeString() : 'N/A'}
+                      </p>
+                    </div>
+                  `).join('')}
+                ` : '<p style="color: #6b7280; text-align: center;">No tasks recorded</p>'}
+              </div>
+            `).join('')}
+          ` : '<p style="color: #6b7280; text-align: center; padding: 30px;">No time entries found for this period.</p>'}
+          
+          ${report.summary ? `
+            <div style="margin-top: 25px; padding: 20px; background-color: #f9fafb; border-radius: 8px;">
+              <h2 style="text-align: center; margin-bottom: 15px; color: #374151;">Weekly Summary</h2>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                <div style="text-align: center; padding: 15px; background-color: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                  <p style="font-size: 24px; font-weight: bold; margin: 0; color: #3b82f6;">${formatTime(report.summary.totalHours)}</p>
+                  <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">Total Hours</p>
+                </div>
+                <div style="text-align: center; padding: 15px; background-color: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                  <p style="font-size: 24px; font-weight: bold; margin: 0; color: #ef4444;">${formatTime(report.summary.totalBreaks)}</p>
+                  <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">Total Breaks</p>
+                </div>
+                <div style="text-align: center; padding: 15px; background-color: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                  <p style="font-size: 24px; font-weight: bold; margin: 0; color: #10b981;">${formatTime(report.summary.netHours)}</p>
+                  <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">Net Hours</p>
+                </div>
+                <div style="text-align: center; padding: 15px; background-color: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                  <p style="font-size: 24px; font-weight: bold; margin: 0; color: #f59e0b;">${report.summary.daysWorked || 0}</p>
+                  <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">Days Worked</p>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+          
+          <div style="margin-top: 30px; text-align: center; color: #9ca3af; font-size: 12px;">
+            <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+          </div>
+        </div>
+      `;
+
+      // Create PDF
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      
+      // Generate file name
+      const fileName = `Employee_Report_${employee.fullName?.replace(/\s+/g, '_') || 'Employee'}_${dateRange.start}_to_${dateRange.end}.pdf`;
+      
+      // Save the PDF
+      pdf.save(fileName);
+      
+      // Clean up
+      document.body.removeChild(pdfContainer);
+      
+      showMessage('PDF downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showMessage('Failed to generate PDF', 'error');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   const handleDateChange = (e) => {
     const selectedDate = new Date(e.target.value);
     setDateRange({
@@ -68,6 +206,7 @@ export default function EmployeeReports() {
   };
 
   const formatTime = (hours) => {
+    if (!hours || isNaN(hours)) return '0h 0m';
     const wholeHours = Math.floor(hours);
     const minutes = Math.round((hours - wholeHours) * 60);
     return `${wholeHours}h ${minutes}m`;
@@ -108,101 +247,133 @@ export default function EmployeeReports() {
             Weekly Report for {employee?.fullName}
           </h2>
         </div>
-        <input
-          type="date"
-          value={dateRange.start}
-          onChange={handleDateChange}
-          className="px-3 py-2 border rounded"
-        />
+        <div className="flex items-center gap-4">
+          <input
+            type="date"
+            value={dateRange.start}
+            onChange={handleDateChange}
+            className="px-3 py-2 border rounded"
+          />
+          <button
+            onClick={downloadPDF}
+            disabled={!report || generatingPDF}
+            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 px-4 py-2 text-white rounded flex items-center"
+          >
+            {generatingPDF ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Download as PDF
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {report ? (
-        <>
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <div className="flex justify-between">
-              <div>
-                <p className="font-medium">Employee: {report.employee?.fullName}</p>
-                <p className="text-sm text-gray-600">Period: {report.period}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold">Total Hours: {formatTime(report.summary.totalHours)}</p>
-                <p className="text-sm">Net Hours: {formatTime(report.summary.netHours)}</p>
+      <div ref={reportRef}>
+        {report ? (
+          <>
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <div className="flex justify-between">
+                <div>
+                  <p className="font-medium">Employee: {report.employee?.fullName}</p>
+                  <p className="text-sm text-gray-600">Period: {report.period}</p>
+                  {employee && (
+                    <>
+                      <p className="text-sm text-gray-600">ID: {employee.employeeId || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Domain: {employee.domain || 'N/A'}</p>
+                    </>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold">Total Hours: {formatTime(report.summary.totalHours)}</p>
+                  <p className="text-sm">Net Hours: {formatTime(report.summary.netHours)}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {report.dailyReports.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-6 text-center">
-              <p className="text-gray-500">No time entries found for this period.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {report.dailyReports.map((dayReport, index) => (
-                <div key={index} className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">{dayReport.date}</h3>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">Worked: {formatTime(dayReport.totalHours)}</p>
-                      <p className="text-sm text-gray-600">Breaks: {formatTime(dayReport.totalBreaks)}</p>
+            {report.dailyReports.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                <p className="text-gray-500">No time entries found for this period.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {report.dailyReports.map((dayReport, index) => (
+                  <div key={index} className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">{dayReport.date}</h3>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">Worked: {formatTime(dayReport.totalHours)}</p>
+                        <p className="text-sm text-gray-600">Breaks: {formatTime(dayReport.totalBreaks)}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {dayReport.tasks.map((task, taskIndex) => (
+                        <div key={taskIndex} className="border-l-4 border-blue-500 pl-4 py-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-medium">{task.taskTitle}</h4>
+                              <p className="text-sm text-gray-600">{task.taskCategory}</p>
+                              {task.description && (
+                                <p className="text-sm mt-1">{task.description}</p>
+                              )}
+                            </div>
+                            <div className="text-right text-sm">
+                              <p>{formatTime(task.hours)}</p>
+                              {task.breaks > 0 && (
+                                <p className="text-gray-600">Breaks: {formatTime(task.breaks)}</p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(task.startTime).toLocaleTimeString()} - {new Date(task.endTime).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
 
-                  <div className="space-y-3">
-                    {dayReport.tasks.map((task, taskIndex) => (
-                      <div key={taskIndex} className="border-l-4 border-blue-500 pl-4 py-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium">{task.taskTitle}</h4>
-                            <p className="text-sm text-gray-600">{task.taskCategory}</p>
-                            {task.description && (
-                              <p className="text-sm mt-1">{task.description}</p>
-                            )}
-                          </div>
-                          <div className="text-right text-sm">
-                            <p>{formatTime(task.hours)}</p>
-                            {task.breaks > 0 && (
-                              <p className="text-gray-600">Breaks: {formatTime(task.breaks)}</p>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(task.startTime).toLocaleTimeString()} - {new Date(task.endTime).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">Weekly Summary</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{formatTime(report.summary.totalHours)}</p>
+                  <p className="text-sm text-gray-600">Total Hours</p>
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-lg font-semibold mb-2">Weekly Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{formatTime(report.summary.totalHours)}</p>
-                <p className="text-sm text-gray-600">Total Hours</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{formatTime(report.summary.totalBreaks)}</p>
-                <p className="text-sm text-gray-600">Total Breaks</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{formatTime(report.summary.netHours)}</p>
-                <p className="text-sm text-gray-600">Net Hours</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{report.summary.daysWorked}</p>
-                <p className="text-sm text-gray-600">Days Worked</p>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{formatTime(report.summary.totalBreaks)}</p>
+                  <p className="text-sm text-gray-600">Total Breaks</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{formatTime(report.summary.netHours)}</p>
+                  <p className="text-sm text-gray-600">Net Hours</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{report.summary.daysWorked}</p>
+                  <p className="text-sm text-gray-600">Days Worked</p>
+                </div>
               </div>
             </div>
+          </>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+            <p className="text-gray-500">No report data available.</p>
           </div>
-        </>
-      ) : (
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <p className="text-gray-500">No report data available.</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
