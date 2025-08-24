@@ -255,7 +255,7 @@ export default function Home() {
             <div>
               <div className="space-y-6 text-lg text-gray-700">
                 <p>
-                  CollabSphere is built to help teams like Aarav's stay focused and
+                  CollabSphere is built to help teams like Aaravs stay focused and
                   efficient. From assigning tasks to generating weekly reports,
                   everything is integrated in one place.
                 </p>
@@ -311,10 +311,10 @@ export default function Home() {
           className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 md:p-8 text-white scroll-mt-28 mt-24"
         >
           <h2 className="text-3xl font-semibold mb-6">
-            Ready to boost your team's productivity?
+            Ready to boost your teams productivity?
           </h2>
           <p className="mb-4 text-lg text-white">
-            Fill out the form below and we'll get back to you as soon as possible.
+            Fill out the form below and we will get back to you as soon as possible.
           </p>
 
           <div className="max-w-xl mx-auto bg-white rounded-xl p-6 shadow-lg text-gray-800">
