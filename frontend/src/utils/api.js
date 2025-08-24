@@ -12,7 +12,7 @@ export const fetchWithAuth = async (url, options = {}) => {
   }
      
   
-  const response = await fetch(`http://localhost:5000/api${url}`, {
+  const response = await fetch(`https://coursevitaprojecttask.onrender.com/api${url}`, {
     ...options,
     headers,
   });
