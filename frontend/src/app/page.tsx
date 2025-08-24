@@ -305,43 +305,23 @@ export default function Home() {
           <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce delay-300"></div>
         </div>
 
-        {/* Contact Section with White Form Box */}
+        {/* Contact Section - Simplified without form */}
         <section
           id="contact"
-          className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 md:p-8 text-white scroll-mt-28 mt-24"
+          className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-8 md:p-12 text-white scroll-mt-28 mt-24"
         >
           <h2 className="text-3xl font-semibold mb-6">
             Ready to boost your teams productivity?
           </h2>
-          <p className="mb-4 text-lg text-white">
-            Fill out the form below and we will get back to you as soon as possible.
+          <p className="mb-6 text-lg">
+            Get in touch with us to learn more about how CollabSphere can transform your teams workflow.
           </p>
-
-          <div className="max-w-xl mx-auto bg-white rounded-xl p-6 shadow-lg text-gray-800">
-            <form className="flex flex-col gap-4">
-              <input
-                type="text"
-                placeholder="Your Name"
-                className="p-3 rounded-lg font-medium border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <input
-                type="email"
-                placeholder="Your Email"
-                className="p-3 rounded-lg font-medium border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <textarea
-                placeholder="Your Message"
-                rows={4}
-                className="p-3 rounded-lg font-medium border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              ></textarea>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white hover:bg-blue-700 font-medium py-3 px-6 rounded-lg text-lg transition duration-300 flex items-center gap-2 justify-center mx-auto transform hover:scale-105"
-              >
-                Send Message <FiArrowRight />
-              </button>
-            </form>
-          </div>
+          <button
+            onClick={handleLoginClick}
+            className="bg-white text-blue-600 hover:bg-blue-50 font-medium py-3 px-8 rounded-lg text-lg transition duration-300 flex items-center gap-2 justify-center mx-auto transform hover:scale-105"
+          >
+            Get Started <FiArrowRight />
+          </button>
         </section>
       </div>
 
@@ -432,7 +412,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-start space-x-3">
                   <FiMapPin className="text-blue-400 mt-1 flex-shrink-0" />
-                  <span className="text-gray-400">Andhra Pradesh,India</span>
+                  <span className="text-gray-400">Andhra Pradesh, India</span>
                 </li>
               </ul>
             </div>

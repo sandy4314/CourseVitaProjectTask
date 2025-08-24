@@ -38,7 +38,7 @@ export default function RootLayout({ children }) {
     return (
       <html lang="en">
         <head>
-          <title>ProjectTask And Collaboration</title>
+          <title>CollabSphere</title>
         </head>
         <body className={inter.className}>
           <div className="flex items-center justify-center min-h-screen">
@@ -52,7 +52,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <title>ProjectTask And Collaboratio</title>
+        <title>CollabSphere</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
       </head>
       <body className={inter.className}>
